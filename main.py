@@ -2,7 +2,7 @@ import time
 import pygame
 import random
 import math
-
+import copy
 width, height = 500, 500
 screen = pygame.display.set_mode((500, 500))
 pygame.display.set_caption("Evolution sim")
@@ -16,7 +16,7 @@ alphabet = [
 ]
 no_food = False
 class Cell:
-    def __init__(self, x, y, genetics={"health": 0, "speed": 0, "generation": -1, "name": ""}, type="predator"):
+    def __init__(self, x, y, genetics={"health": 0, "speed": 0, "generation": -1, "name": "","aggresiveness":0}, type="predator"):
         global population
         if type != "food":
             population += 1
@@ -27,8 +27,38 @@ class Cell:
         self.type = type
         self.genetics = genetics
         self.surname = self.genetics['name'][int(len(self.genetics['name']) // 2):]
-        self.color = genetics['color'] if type == "predator" else (0, 255, 0) if type == "food" else (255, 255, 255)
+        if type == "food":
+            self.color=(0,255,0)
+        else:
+            self.color = (genetics['aggresiveness']%255,genetics['health']%255,genetics['speed']%255)
         self.family = genetics.get('family', None)
+    def will_kill(self):
+        global deadcells
+        kill_potentail=[]
+        if self.genetics['aggresiveness'] > 0:
+            for family in families.values():
+                for c in family:
+                    if c.type == "predator":
+                        if c.x == self.x - 1 and c.y == self.y:
+                            kill_potentail.append(c)
+                        elif c.x == self.x and c.y == self.y:
+                            kill_potentail.append(c)
+                        elif c.x == self.x + 1 and c.y == self.y:
+                            kill_potentail.append(c)
+                        elif c.x == self.x and c.y == self.y - 1:
+                            kill_potentail.append(c)
+                        elif c.x == self.x and c.y == self.y + 1:
+                            kill_potentail.append(c)
+        if kill_potentail:
+            for c in kill_potentail:
+                if random.randint(0, 100) < self.genetics['aggresiveness']:
+                    if not c.health-self.genetics['aggresiveness'] <= 0:
+                        c.health -= self.genetics['aggresiveness']
+                        #c.genetics['health']-=2
+                        print(f"{self.genetics['name']} Hit {c.genetics['name']}")
+                    if c.health-self.genetics['aggresiveness'] <= 0:
+                        deadcells.append(c)
+                        print(f"{self.genetics['name']} Killed {c.genetics['name']}")
     def update(self):
         prevlocation = (self.x, self.y)
         global deadcells
@@ -94,8 +124,8 @@ class Cell:
                 for family in families.values():
                     if c in family:
                         family.remove(c)
-                else:
-                    print(f"failed to remove {c.x},{c.y} : {c.genetics['name']}")
+                
+                    #print(f"failed to remove {c.x},{c.y} : {c.genetics['name']}")
         scheduled_for_removal = []
         def hadfood():pass
         if had_food:
@@ -115,11 +145,16 @@ class Cell:
                 name += random.choice(alphabet)
             name += self.surname
             family = self.family
-            if random.random() < 0.1:
-                name = ""
+            if random.randint(0,10) in [1]:
+                newname = ""
                 for i in range(int(len(self.genetics['name']) // 2)):
-                    name += random.choice(alphabet)
-                name += self.surname
+                    newname += random.choice(alphabet)
+                name = name[0] + name[1] + name[2] + newname
+                if name[3] not in families.keys():
+                    families[name[3]] = []
+            aggro = self.genetics['aggresiveness'] + random.randint(-1, 1)
+            if aggro < 0:
+                aggro = 0
             families[family].append(
                 Cell(
                     random.randint(0, 49),
@@ -130,12 +165,13 @@ class Cell:
                         "generation": self.genetics['generation'] + 1,
                         "color": color,
                         "name": name,
-                        "family": family
+                        "family": name[3],
+                        "aggresiveness":aggro
                     },
                     type="predator"
                 )
             )
-
+            self.will_kill()
 families = {"food": []}
 for i in range(10):
     x, y = random.randint(0, 49), random.randint(0, 49)
@@ -147,7 +183,7 @@ for i in range(10):
     name = ""
     for __ in range(6):
         name += random.choice(alphabet)
-    c = Cell(x, y, genetics={"health": 100, "speed": 1, "generation": 0, "color": (255, 255, 255), "name": name, "family": name[len(name)//2]})
+    c = Cell(x, y, genetics={"health": 100, "speed": 1, "generation": 0, "color": (255, 255, 255), "name": name, "family": name[len(name)//2],"aggresiveness":0})
     if c.family not in families:
         families[c.family] = []
     families[c.family].append(c)
@@ -158,8 +194,9 @@ for i in range(5):
 
 def draw():
     global flags, threads, deadcells, population
-    screen.fill((0, 0, 0))
-    for family in families.values():
+    screen.fill((0, 0, 0)) 
+    vals = families.copy()
+    for family in vals.values():
         for c in family:
             if c.type == "predator":
                 c.update()
@@ -168,8 +205,8 @@ def draw():
             if c in family:
                 if not family == families['food'] and not c.genetics['name'] == "":
                     family.remove(c)
-        else:
-            print(f"failed to remove {c.x},{c.y} : {c.genetics['name']}")
+        
+            #print(f"failed to remove {c.x},{c.y} : {c.genetics['name']}")
 
     food = 0
     for family in families.values():
@@ -188,7 +225,7 @@ def draw():
     pygame.display.update()
 
 clickcounter = 0
-preveiousclicked = Cell(99, 99, genetics={"health": 0, "speed": 0, "generation": 0, "color": (0, 0, 0), "name": ""})
+preveiousclicked = Cell(99, 99, genetics={"health": 0, "speed": 0, "generation": 0, "color": (0, 0, 0), "name": "","aggresiveness":0})
 
 while True:
     oldfamilies = families.copy()
@@ -204,9 +241,10 @@ while True:
             elif event.key == pygame.K_g:
                 no_food=not no_food
             elif event.key == pygame.K_p:
-                        best_health = Cell(99, 99, {"health": 0, "speed": 0, "generation": 0, "color": (0, 0, 0), "name": ""})
-                        best_speed = Cell(99, 99, {"health": 0, "speed": 0, "generation": 0, "color": (0, 0, 0), "name": ""})
-                        best_generation = Cell(99, 99, {"health": 0, "speed": 0, "generation": 0, "color": (0, 0, 0), "name": ""})
+                        best_health = Cell(99, 99)
+                        best_speed = Cell(99, 99)
+                        best_generation = Cell(99, 99)
+                        best_aggro = Cell(99, 99)
                         for family in families.values():
                             for c in family:
                                 if c.type == "predator":
@@ -216,9 +254,12 @@ while True:
                                         best_speed = c
                                     if c.genetics['generation'] > best_generation.genetics['generation']:
                                         best_generation = c
+                                    if c.genetics['aggresiveness'] > best_aggro.genetics['aggresiveness']:
+                                        best_aggro = c
                         print(f"""{best_health.genetics}
 {best_speed.genetics}
-{best_generation.genetics}""")
+{best_generation.genetics}
+{best_aggro.genetics}""")
 
         if event.type == pygame.MOUSEBUTTONUP:
             x, y = pygame.mouse.get_pos()
@@ -241,7 +282,7 @@ while True:
                 name = ""
                 for __ in range(6):
                     name += random.choice(alphabet)
-                c = Cell(x, y, genetics={"health": 100, "speed": 1, "generation": 0, "color": (255, 255, 255), "name": name, "family": name[len(name)//2]})
+                c = Cell(x, y, genetics={"health": 100, "speed": 1, "generation": 0, "color": (255, 255, 255), "name": name, "family": name[len(name)//2],"aggresiveness":0})
                 if c.family not in families:
                     families[c.family] = []
                 families[c.family].append(c)
